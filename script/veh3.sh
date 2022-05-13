@@ -1,0 +1,1 @@
+python3 basicDiscovery.py --endpoint a3odsns9m7sufx-ats.iot.us-east-1.amazonaws.com --rootCA device/root-ca-cert.pem --cert device/veh3-setup/5925b5cd33.cert.pem --key device/veh3-setup/5925b5cd33.private.key --thingName vehicle_3 --topic 'veh3' --mode both --data data2/vehicle3.csv
