@@ -1,3 +1,4 @@
+from glob import glob
 import json
 import logging
 import sys
@@ -19,9 +20,9 @@ MAX_NUM_CARPORT = 100
 PUBLIC_CARPORT = 80
 # init as free
 carport_array = np.zeros(MAX_NUM_CARPORT, dtype=np.int8)
-next_free_array = (i+1 for i in range(MAX_NUM_CARPORT))
-# next_private_free = 0
-next_public_free = 0
+next_free_array = [i+1 for i in range(PUBLIC_CARPORT, MAX_NUM_CARPORT)]
+temporary_veh_dic = {}
+next_public_free = PUBLIC_CARPORT
 num_occupied = 0
 
 dataset = pd.DataFrame(
@@ -32,12 +33,14 @@ user_set = {}
 
 
 def generate_user(id):
+    global user_set
     if id not in user_set.keys():
         user_set[id] = ''.join(
             [random.choice(string.ascii_letters + string.digits) for n in range(4)])
 
 
 def generate_vehicle(id):
+    global user_set
     veh_dic = {}
     veh_dic["vehicle_id"] = ''.join(
         [random.choice(string.ascii_letters + string.digits) for n in range(5)])
@@ -51,8 +54,27 @@ def generate_vehicle(id):
     return veh_dic
 
 
-def assign_carport(veh_type, veh_id):
+def init_guest(veh_id):
+    veh_dic = {}
+    veh_dic["vehicle_id"] = veh_id
+    veh_dic["user_id"] = -1
+    veh_dic["user_name"] = "none"
+    veh_dic["veh_type"] = 2
+    veh_dic["veh_state"] = -1
+    veh_dic["registered_carport_id"] = -1
+    return veh_dic
+
+
+def debug():
     global num_occupied, carport_array, next_free_array, next_public_free
+    print("num_occupied", num_occupied)
+    print("carport_array", carport_array)
+    print("next_free_array", next_free_array)
+    print("next_public_free", next_public_free)
+
+
+def assign_carport(veh_type, veh_id):
+    global num_occupied, carport_array, next_free_array, next_public_free, dataset
     assign_id = 0
     if num_occupied >= MAX_NUM_CARPORT:
         return -1
@@ -73,18 +95,18 @@ def assign_carport(veh_type, veh_id):
     # not get the registered carport or guest car
     assign_id = next_public_free
     carport_array[next_public_free] = veh_type  # assign to a guest car
-    next_public_free = next_free_array[assign_id]
+    next_public_free = next_free_array[assign_id-PUBLIC_CARPORT]
     num_occupied += 1
     dataset.loc[dataset.vehicle_id == veh_id, "veh_state"] = assign_id
     return assign_id
 
 
 def unassign_carport(carport_id):
-    global num_occupied, carport_array, next_free_array, next_public_free
+    global num_occupied, carport_array, next_free_array, next_public_free, dataset
     if carport_array[carport_id] == 0:
         return -1
     if carport_id >= PUBLIC_CARPORT:
-        next_free_array[carport_id] = next_public_free
+        next_free_array[carport_id-PUBLIC_CARPORT] = next_public_free
         next_public_free = carport_id
     carport_array[carport_id] = 0
     dataset.loc[dataset.veh_state == carport_id, "veh_state"] = -1
@@ -102,7 +124,7 @@ for i in range(10):
 #     print(dataset.head())
 
 
-def lambda_handler(event, context):
+def lambda_handler(event):
     global carport_array, dataset
     # controller
     if event["device"] == "controller":
@@ -110,21 +132,33 @@ def lambda_handler(event, context):
                    "behavior": "re_enter", "detail": "none"}
         veh_id = event["detail"]
         filtered_df = dataset[dataset.vehicle_id == veh_id]
-        # print(filtered_df)
+        if filtered_df.empty:
+            dic = init_guest(veh_id)
+#             print(dic)
+            dataset = dataset.append(dic, ignore_index=True)
+            filtered_df = dataset[dataset.vehicle_id == veh_id]
+
         veh_dic = {}
-        veh_dic = filtered_df.to_dict(orient="list")
-        if veh_dic["veh_state"][0] >= 0:
+        veh_dic = filtered_df.to_dict(orient="dict")
+        print(veh_dic)
+        if list(veh_dic["veh_state"].values())[0] >= 0:
             # quit
             message["behavior"] = "re_quit"
-            ret = unassign_carport(veh_dic["veh_state"][0])
+            ret = unassign_carport(list(veh_dic["veh_state"].values())[0])
             if ret < 0:
                 # error
                 message["detail"] = "error"
             else:
-                message["detail"] = str(veh_dic["veh_state"][0])
+                message["detail"] = str(unassign_carport(
+                    list(veh_dic["veh_state"].values())[0]))
+                if list(veh_dic["veh_type"].values())[0] == 2:
+                    dataset.drop(index=list(veh_dic["veh_state"].keys())[
+                                 0], inplace=True)
+                    return
         else:
             # enter
-            assign_id = assign_carport(veh_dic["veh_type"][0], veh_id)
+            assign_id = assign_carport(
+                list(veh_dic["veh_type"].values())[0], veh_id)
             if assign_id < 0:
                 # error
                 message["detail"] = "error"
