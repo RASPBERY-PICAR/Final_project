@@ -31,10 +31,19 @@ AllowedActions = ['both', 'publish', 'subscribe']
 
 # General message notification callback
 
+cmd_mode = 0  # send, 1 for reply
+MAX_NUM_CARPORT = 100
+
 
 def customOnMessage(message):
-    print('\nReceived message on topic %s: %s\n' %
-          (message.topic, message.payload))
+    global cmd_mode
+    print('\nReceived message on topic %s: \n' % (message.topic))
+    msg = json.loads(message.payload)
+    print(msg)
+    if msg["behavior"] == "confirm":
+        cmd_mode = 1
+    elif msg["behavior"] == "re_query":
+        print(msg["detail"])
 
 
 MAX_DISCOVERY_RETRIES = 1
@@ -200,6 +209,28 @@ if args.mode == 'both' or args.mode == 'subscribe':
     myAWSIoTMQTTClient.subscribe(topic, 0, None)
 time.sleep(2)
 
+message = {"device": args.thingName, "behavior": "init", "detail": "none"}
+if args.mode == 'both' or args.mode == 'publish':
+    messageJson = json.dumps(message)
+    myAWSIoTMQTTClient.publish(topic, messageJson, 0)
 # get the vehicle data from file
 if args.mode == 'both' or args.mode == 'publish':
     data_file = pd.read_csv(args.data)
+
+
+while 1:
+    if cmd_mode == 1:
+        cmd = input("ENTER: yes/no")
+        message["behavior"] = "re_confirm"
+        message["detail"] = cmd
+        cmd_mode = 0
+    else:
+        cmd = input("ENTER: quit, query")
+        if cmd == "quit":
+            message["behavior"] = "disconnect"
+            break
+        elif cmd == "query":
+            message["behavior"] = "query"
+
+    messageJson = json.dumps(message)
+    myAWSIoTMQTTClient.publish(topic, messageJson, 0)
