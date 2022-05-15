@@ -1,0 +1,1 @@
+python3 user_app.py --endpoint a3odsns9m7sufx-ats.iot.us-east-1.amazonaws.com --rootCA device/root-ca-cert.pem --cert device/user1-setup/50daf4760a.cert.pem --key device/user1-setup/50daf4760a.private.key --thingName user_1 --topic 'user_1' --mode both

@@ -1,0 +1,1 @@
+python3 controller.py --endpoint a3odsns9m7sufx-ats.iot.us-east-1.amazonaws.com --rootCA device/root-ca-cert.pem --cert device/controller-setup/d15774fbe7.cert.pem --key device/controller-setup/d15774fbe7.private.key --thingName controller --topic 'controller' --mode both

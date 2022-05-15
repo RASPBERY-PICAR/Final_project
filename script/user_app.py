@@ -21,7 +21,6 @@ import uuid
 import json
 import logging
 import argparse
-import pandas as pd
 from AWSIoTPythonSDK.core.greengrass.discovery.providers import DiscoveryInfoProvider
 from AWSIoTPythonSDK.core.protocol.connection.cores import ProgressiveBackOffCore
 from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
@@ -71,9 +70,9 @@ parser.add_argument("-m", "--mode", action="store", dest="mode", default="both",
 parser.add_argument("-p", "--print_discover_resp_only",
                     action="store_true", dest="print_only", default=False)
 
-# Modified to point to a CSV file. We will transmit one row at a time of this file.
-parser.add_argument("-d", "--data", action="store",
-                    dest="data", default=None, help="Path to CSV file")
+# # Modified to point to a CSV file. We will transmit one row at a time of this file.
+# parser.add_argument("-d", "--data", action="store",
+#                     dest="data", default=None, help="Path to CSV file")
 
 args = parser.parse_args()
 host = args.host
@@ -213,9 +212,9 @@ message = {"device": args.thingName, "behavior": "init", "detail": "none"}
 if args.mode == 'both' or args.mode == 'publish':
     messageJson = json.dumps(message)
     myAWSIoTMQTTClient.publish(topic, messageJson, 0)
-# get the vehicle data from file
-if args.mode == 'both' or args.mode == 'publish':
-    data_file = pd.read_csv(args.data)
+# # get the vehicle data from file
+# if args.mode == 'both' or args.mode == 'publish':
+#     data_file = pd.read_csv(args.data)
 
 
 while 1:
