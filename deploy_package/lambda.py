@@ -44,82 +44,96 @@ def generate_vehicle(id):
     if id not in user_set.keys():
         generate_user(id)
     veh_dic["user_id"] = id
-    veh_dic["user_name"] = user_set["user_id"]
+    veh_dic["user_name"] = user_set[id]
     veh_dic["veh_type"] = 1
     veh_dic["veh_state"] = -1
+    veh_dic["registered_carport_id"] = random.choice(range(PUBLIC_CARPORT))
     return veh_dic
 
 
-def assign_carport(type, veh_id):
+def assign_carport(veh_type, veh_id):
+    global num_occupied, carport_array, next_free_array, next_public_free
     assign_id = 0
     if num_occupied >= MAX_NUM_CARPORT:
         return -1
-    if type == 1:  # has registered carport
-        veh_dic = dataset.to_dict(dataset[dataset.vehicle_id == veh_id])
-        assign_id = veh_dic["registered_carport_id"]
-        if carport_array[assign_id] == 0:
-            num_occupied += 1
-            return assign_id
+    if veh_type == 1:  # has registered carport
+        filtered_df = dataset[dataset.vehicle_id == veh_id]
+        # print(filtered_df)
+        veh_dic = {}
+        veh_dic = filtered_df.to_dict(orient="list")
+#         print(veh_dic)
+        assign_id_list = veh_dic["registered_carport_id"]
+        for assign_id in assign_id_list:
+            if carport_array[assign_id] == 0:
+                num_occupied += 1
+                carport_array[assign_id] = 1
+                dataset.loc[dataset.vehicle_id ==
+                            veh_id, "veh_state"] = assign_id
+                return assign_id
     # not get the registered carport or guest car
     assign_id = next_public_free
-    carport_array[next_public_free] = type  # assign to a guest car
+    carport_array[next_public_free] = veh_type  # assign to a guest car
     next_public_free = next_free_array[assign_id]
     num_occupied += 1
-    dataset[dataset.vehicle_id == veh_id]["veh_state"] = assign_id
+    dataset.loc[dataset.vehicle_id == veh_id, "veh_state"] = assign_id
     return assign_id
 
 
 def unassign_carport(carport_id):
+    global num_occupied, carport_array, next_free_array, next_public_free
     if carport_array[carport_id] == 0:
         return -1
     if carport_id >= PUBLIC_CARPORT:
         next_free_array[carport_id] = next_public_free
         next_public_free = carport_id
+    carport_array[carport_id] = 0
+    dataset.loc[dataset.veh_state == carport_id, "veh_state"] = -1
     num_occupied -= 1
     return 0
 
 
 # init data(10 vehicles)
+dataset.drop(dataset.index, inplace=True)
 for i in range(10):
     dic = generate_vehicle(i)
-    dataset.append(dic)
+#     print(dic)
+    dataset = dataset.append(dic, ignore_index=True)
     assign_carport(1, dic["vehicle_id"])
+#     print(dataset.head())
 
 
 def lambda_handler(event, context):
     global carport_array, dataset
+    # controller
     if event["device"] == "controller":
-        if event["behavior"] == "enter":
-            message = {"device": "cloud",
-                       "behavior": "re_enter", "detail": "none"}
-            veh_id = event["detail"]
-            veh_dic = dataset.to_dict(dataset[dataset.vehicle_id == veh_id])
-            if veh_dic["veh_state"] >= 0:
+        message = {"device": "cloud",
+                   "behavior": "re_enter", "detail": "none"}
+        veh_id = event["detail"]
+        filtered_df = dataset[dataset.vehicle_id == veh_id]
+        # print(filtered_df)
+        veh_dic = {}
+        veh_dic = filtered_df.to_dict(orient="list")
+        if veh_dic["veh_state"][0] >= 0:
+            # quit
+            message["behavior"] = "re_quit"
+            ret = unassign_carport(veh_dic["veh_state"][0])
+            if ret < 0:
                 # error
                 message["detail"] = "error"
             else:
-                assign_id = assign_carport(veh_dic["veh_type"], veh_id)
-                if assign_id < 0:
-                    # error
-                    message["detail"] = "error"
-                else:
-                    message["detail"] = str(assign_id)
-        elif event["behavior"] == "quit":
-            message = {"device": "cloud",
-                       "behavior": "re_quit", "detail": "none"}
-            veh_id = event["detail"]
-            veh_dic = dataset.to_dict(dataset[dataset.vehicle_id == veh_id])
-            if veh_dic["veh_state"] < 0:
+                message["detail"] = str(veh_dic["veh_state"][0])
+        else:
+            # enter
+            assign_id = assign_carport(veh_dic["veh_type"][0], veh_id)
+            if assign_id < 0:
                 # error
                 message["detail"] = "error"
             else:
-                ret = unassign_carport(veh_dic["veh_state"])
-                if ret < 0:
-                    # error
-                    message["detail"] = "error"
-                else:
-                    message["detail"] = "succ"
+                message["detail"] = str(assign_id)
+
         client.publish(topic="controller", qos=0, payload=json.dumps(message))
+        client.publish(topic="log", qos=0, payload=json.dumps(message))
+    # user side
     else:
         if event["behavior"] == "query":
             message = {"device": "cloud",
