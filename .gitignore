@@ -3,3 +3,6 @@ credential
 .DS_Store
 script/device
 script/groupCA
+deploy_package/Archive.zip
+.gitignore
+deploy_package/python.zip

@@ -46,7 +46,7 @@ def generate_vehicle(user_id, veh_id):
     if user_id not in user_set.keys():
         generate_user(user_id)
     veh_dic["user_id"] = 'user_'+str(user_id)
-    veh_dic["user_name"] = user_set[user_id]
+    veh_dic["user_name"] = user_set['user_'+str(user_id)]
     veh_dic["veh_type"] = 1
     veh_dic["veh_state"] = -1
     veh_dic["registered_carport_id"] = random.choice(range(PUBLIC_CARPORT))
@@ -125,8 +125,8 @@ for i in range(10):
 #     print(dataset.head())
 
 
-def lambda_handler(event):
-    global carport_array, dataset
+def lambda_handler(event, context):
+    global carport_array, dataset, user_set
     # controller
     if event["device"] == "controller":
         message = {"device": "cloud",
@@ -171,7 +171,7 @@ def lambda_handler(event):
         client.publish(topic="controller", qos=0, payload=json.dumps(message))
 
         veh_dic = filtered_df.to_dict(orient="list")
-        log_msg = {}, "user_id", "user_name", "veh_type", "veh_state", "registered_carport_id"
+        log_msg = {}
         if message["behavior"] == "re_enter":
             log_msg["opeation"] = "enter"
         elif message["behavior"] == "re_quit":
@@ -206,6 +206,16 @@ def lambda_handler(event):
                                  "occupied_list": occupied_list}
             client.publish(topic=event["device"],
                            qos=0, payload=json.dumps(message))
+            log_msg = {}
+            log_msg["opeation"] = "query"
+            log_msg["carport_id"] = -1
+            log_msg["vehicle_id"] = -1
+            log_msg["veh_type"] = -1
+            log_msg["registered_carport_id"] = -1
+            log_msg["user_id"] = event["device"]
+            log_msg["user_name"] = user_set[event["device"]]
+            client.publish(topic="running_log", qos=0,
+                           payload=json.dumps(log_msg))
         return
         # if __name__ == "__main__":
         #     test_data = pd.read_csv(

@@ -205,6 +205,7 @@ if not connected:
 
 # Successfully connected to the core
 if args.mode == 'both' or args.mode == 'subscribe':
+    print("init subscribe")
     myAWSIoTMQTTClient.subscribe(topic, 0, None)
 time.sleep(2)
 
@@ -216,17 +217,18 @@ if args.mode == 'both' or args.mode == 'publish':
 
 while 1:
     if cmd_mode == 1:
-        cmd = input("ENTER: yes/no")
+        cmd = input("ENTER: yes/no\n")
         message["behavior"] = "re_confirm"
         message["detail"] = cmd
         cmd_mode = 0
     else:
-        cmd = input("ENTER: quit, query")
+        cmd = input("ENTER: quit, query\n")
         if cmd == "quit":
             message["behavior"] = "disconnect"
             break
         elif cmd == "query":
             message["behavior"] = "query"
-
-    messageJson = json.dumps(message)
-    myAWSIoTMQTTClient.publish(topic, messageJson, 0)
+            messageJson = json.dumps(message)
+            myAWSIoTMQTTClient.publish(topic, messageJson, 0)
+            print("send message:", message)
+    time.sleep(0.5)
