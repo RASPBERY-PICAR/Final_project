@@ -32,22 +32,21 @@ dataset = pd.DataFrame(
 user_set = {}
 
 
-def generate_user(id):
+def generate_user(user_id):
     global user_set
-    if id not in user_set.keys():
-        user_set[id] = ''.join(
+    if user_id not in user_set.keys():
+        user_set['user_'+str(user_id)] = ''.join(
             [random.choice(string.ascii_letters + string.digits) for n in range(4)])
 
 
-def generate_vehicle(id):
+def generate_vehicle(user_id, veh_id):
     global user_set
     veh_dic = {}
-    veh_dic["vehicle_id"] = ''.join(
-        [random.choice(string.ascii_letters + string.digits) for n in range(5)])
-    if id not in user_set.keys():
-        generate_user(id)
-    veh_dic["user_id"] = id
-    veh_dic["user_name"] = user_set[id]
+    veh_dic["vehicle_id"] = veh_id
+    if user_id not in user_set.keys():
+        generate_user(user_id)
+    veh_dic["user_id"] = 'user_'+str(user_id)
+    veh_dic["user_name"] = user_set[user_id]
     veh_dic["veh_type"] = 1
     veh_dic["veh_state"] = -1
     veh_dic["registered_carport_id"] = random.choice(range(PUBLIC_CARPORT))
@@ -117,8 +116,10 @@ def unassign_carport(carport_id):
 # init data(10 vehicles)
 dataset.drop(dataset.index, inplace=True)
 for i in range(10):
-    dic = generate_vehicle(i)
+    dic = generate_vehicle(i, ''.join(
+        [random.choice(string.ascii_letters + string.digits) for n in range(5)]))
 #     print(dic)
+    client.publish(topic="vehicle_data", qos=0, payload=json.dumps(dic))
     dataset = dataset.append(dic, ignore_index=True)
     assign_carport(1, dic["vehicle_id"])
 #     print(dataset.head())
@@ -135,6 +136,8 @@ def lambda_handler(event):
         if filtered_df.empty:
             dic = init_guest(veh_id)
 #             print(dic)
+            client.publish(topic="vehicle_data", qos=0,
+                           payload=json.dumps(dic))
             dataset = dataset.append(dic, ignore_index=True)
             filtered_df = dataset[dataset.vehicle_id == veh_id]
 
@@ -166,7 +169,20 @@ def lambda_handler(event):
                 message["detail"] = str(assign_id)
 
         client.publish(topic="controller", qos=0, payload=json.dumps(message))
-        client.publish(topic="log", qos=0, payload=json.dumps(message))
+
+        veh_dic = filtered_df.to_dict(orient="list")
+        log_msg = {}, "user_id", "user_name", "veh_type", "veh_state", "registered_carport_id"
+        if message["behavior"] == "re_enter":
+            log_msg["opeation"] = "enter"
+        elif message["behavior"] == "re_quit":
+            log_msg["opeation"] = "quit"
+        log_msg["carport_id"] = veh_dic["veh_state"][0]
+        log_msg["vehicle_id"] = veh_dic["vehicle_id"][0]
+        log_msg["veh_type"] = veh_dic["veh_type"][0]
+        log_msg["registered_carport_id"] = veh_dic["registered_carport_id"][0]
+        log_msg["user_id"] = veh_dic["user_id"][0]
+        log_msg["user_name"] = veh_dic["user_name"][0]
+        client.publish(topic="running_log", qos=0, payload=json.dumps(log_msg))
     # user side
     else:
         if event["behavior"] == "query":

@@ -212,9 +212,6 @@ message = {"device": args.thingName, "behavior": "init", "detail": "none"}
 if args.mode == 'both' or args.mode == 'publish':
     messageJson = json.dumps(message)
     myAWSIoTMQTTClient.publish(topic, messageJson, 0)
-# # get the vehicle data from file
-# if args.mode == 'both' or args.mode == 'publish':
-#     data_file = pd.read_csv(args.data)
 
 
 while 1:
