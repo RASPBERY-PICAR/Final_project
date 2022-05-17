@@ -30,7 +30,7 @@ from AWSIoTPythonSDK.MQTTLib import AWSIoTMQTTClient
 from AWSIoTPythonSDK.exception.AWSIoTExceptions import DiscoveryInvalidRequestException
 
 AllowedActions = ['both', 'publish', 'subscribe']
-bluetoothSerial = serial.Serial( "/dev/rfcomm0", baudrate=9600 ) #make sure is the same path as line 14. 
+bluetoothSerial = serial.Serial( "/dev/rfcomm2", baudrate=9600 ) #make sure is the same path as line 14. 
 # General message notification callback
 payload = ""
 topic = ""
@@ -206,67 +206,33 @@ if not connected:
     sys.exit(-2)
 
 # Successfully connected to the core
-
+if args.mode == 'both' or args.mode == 'subscribe':
+    myAWSIoTMQTTClient.subscribe(topic, 0, customCallback)
     
 
-message={}
+time.sleep(2)
+data_file = getJSON(args.data)
 # get the vehicle data from file
 while (1):
-    empty = os.stat("/home/pi/Desktop/final_project/SendData.json").st_size == 0
-    if (empty == 0):
-        data_file = getJSON(args.data)
-        if (data_file['state']==1):
-            if args.mode == 'both' or args.mode == 'publish':
-                message["device"] = "controller"
-                message["behavior"] = ""
-                message["detail"] = data_file
-                messageJson = json.dumps(message)
-                myAWSIoTMQTTClient.publish(topic, messageJson, 0)
-                print('Published topic %s: %s\n' % (topic, messageJson))
-            if args.mode == 'both' or args.mode == 'subscribe':
-                myAWSIoTMQTTClient.subscribe(topic, 0, customCallback)
-                if (payload!=""):
-                    back_data = json.loads(payload)
-                    print('subscribed topic %s: %s\n' % (topic, payload))
-                    if (back_data!=""):
-                        if (back_data["detail"] != "error"):
-                            bluetoothSerial.write(b'success')
-                            time.sleep(3)
-                            number = back_data["detail"].encode('utf-8')
-                            bluetoothSerial.write(number)
-                    payload = ""
-            
-            parsedData_blank ={ 
-                    "LicensePlate":"",
-                    "LicensePlateConf": "",
-                    "state":0,
-                    "TimeStamp":"",   
-                } 
-            json_object = json.dumps(parsedData_blank, indent = 4) 
-            with open("/home/pi/Desktop/final_project/SendData.json", "w") as outfile: #Write the parsed json in SendData.json on Desktop 
-                outfile.write(json_object)
-            time.sleep(1)
-        else:
-            if args.mode == 'both' or args.mode == 'subscribe':
-                myAWSIoTMQTTClient.subscribe(topic, 0, customCallback)
-                if (payload!=""):
-                    back_data = json.loads(payload)
-                    print('subscribed topic %s: %s\n' % (topic, payload))
-                    if (back_data!=""):
-                        if (back_data["detail"] != "error"):
-                            bluetoothSerial.write(b'success')
-                            time.sleep(3)
-                            number = back_data["detail"].encode('utf-8')
-                            bluetoothSerial.write(number)
-                    payload = ""
+    if (data_file['state']==1):
+        if args.mode == 'both' or args.mode == 'publish':
+            messageJson = data_file
+            # messageJson = json.dumps(message)
+            myAWSIoTMQTTClient.publish(topic, messageJson, 0)
+            print('Published topic %s: %s\n' % (topic, messageJson))
 
-            parsedData_blank ={ 
-                    "LicensePlate":"",
-                    "LicensePlateConf": "",
-                    "state":0,
-                    "TimeStamp":"",   
-                } 
-            json_object = json.dumps(parsedData_blank, indent = 4) 
-            with open("/home/pi/Desktop/final_project/SendData.json", "w") as outfile: #Write the parsed json in SendData.json on Desktop 
-                outfile.write(json_object)
-            time.sleep(1)
+            back_data = getJSON(payload)
+            if (back_data["detail"] != "error"):
+                bluetoothSerial.write(b'success')
+
+        parsedData_blank ={ 
+                "LicensePlate":"",
+                "LicensePlateConf": "",
+                "Status":"",
+                "state":0,
+                "TimeStamp":"",   
+            } 
+    json_object = json.dumps(parsedData_blank, indent = 4) 
+    with open("/home/pi/Desktop/final_project/SendData.json", "w") as outfile: #Write the parsed json in SendData.json on Desktop 
+        outfile.write(json_object)
+    time.sleep(1)
