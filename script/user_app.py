@@ -33,6 +33,8 @@ AllowedActions = ['both', 'publish', 'subscribe']
 cmd_mode = 0  # send, 1 for reply
 MAX_NUM_CARPORT = 100
 
+# message format: {"device": ..., "behavior": ..., "detail": ...}
+
 
 def customOnMessage(message):
     global cmd_mode
@@ -220,6 +222,8 @@ while 1:
         cmd = input("ENTER: yes/no\n")
         message["behavior"] = "re_confirm"
         message["detail"] = cmd
+        messageJson = json.dumps(message)
+        myAWSIoTMQTTClient.publish(topic, messageJson, 0)
         cmd_mode = 0
     else:
         cmd = input("ENTER: quit, query\n")

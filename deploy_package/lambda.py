@@ -97,6 +97,7 @@ def assign_carport(veh_type, veh_id):
     next_public_free = next_free_array[assign_id-PUBLIC_CARPORT]
     num_occupied += 1
     dataset.loc[dataset.vehicle_id == veh_id, "veh_state"] = assign_id
+    print(dataset.head())
     return assign_id
 
 
@@ -113,15 +114,15 @@ def unassign_carport(carport_id):
     return 0
 
 
-# init data(10 vehicles)
+# init data(some registered vehicles)
 dataset.drop(dataset.index, inplace=True)
-for i in range(10):
-    dic = generate_vehicle(i, ''.join(
-        [random.choice(string.ascii_letters + string.digits) for n in range(5)]))
+veh_id_array = ["284FH8", "SLEEP", "8JZT63", "9774224", "6XSU832"]
+for i in range(5):
+    dic = generate_vehicle(i, veh_id_array[i])
 #     print(dic)
     client.publish(topic="vehicle_data", qos=0, payload=json.dumps(dic))
     dataset = dataset.append(dic, ignore_index=True)
-    assign_carport(1, dic["vehicle_id"])
+    # assign_carport(1, dic["vehicle_id"])
 #     print(dataset.head())
 
 
@@ -131,8 +132,10 @@ def lambda_handler(event, context):
     if event["device"] == "controller":
         message = {"device": "cloud",
                    "behavior": "re_enter", "detail": "none"}
-        veh_id = event["detail"]
+        print(event["detail"])
+        veh_id = event["detail"]["LicensePlate"]
         filtered_df = dataset[dataset.vehicle_id == veh_id]
+        print(filtered_df.head())
         if filtered_df.empty:
             dic = init_guest(veh_id)
 #             print(dic)
@@ -143,7 +146,7 @@ def lambda_handler(event, context):
 
         veh_dic = {}
         veh_dic = filtered_df.to_dict(orient="dict")
-        print(veh_dic)
+        # client.publish(topic="running_log", qos=0, payload=json.dumps(veh_dic))
         if list(veh_dic["veh_state"].values())[0] >= 0:
             # quit
             message["behavior"] = "re_quit"
@@ -152,12 +155,10 @@ def lambda_handler(event, context):
                 # error
                 message["detail"] = "error"
             else:
-                message["detail"] = str(unassign_carport(
-                    list(veh_dic["veh_state"].values())[0]))
+                message["detail"] = str(ret)
                 if list(veh_dic["veh_type"].values())[0] == 2:
                     dataset.drop(index=list(veh_dic["veh_state"].keys())[
                                  0], inplace=True)
-                    return
         else:
             # enter
             assign_id = assign_carport(
@@ -172,6 +173,7 @@ def lambda_handler(event, context):
 
         veh_dic = filtered_df.to_dict(orient="list")
         log_msg = {}
+        log_msg["time_stamp"] = event["detail"]["TimeStamp"]
         if message["behavior"] == "re_enter":
             log_msg["opeation"] = "enter"
         elif message["behavior"] == "re_quit":
@@ -182,6 +184,7 @@ def lambda_handler(event, context):
         log_msg["registered_carport_id"] = veh_dic["registered_carport_id"][0]
         log_msg["user_id"] = veh_dic["user_id"][0]
         log_msg["user_name"] = veh_dic["user_name"][0]
+
         client.publish(topic="running_log", qos=0, payload=json.dumps(log_msg))
     # user side
     else:
@@ -207,6 +210,7 @@ def lambda_handler(event, context):
             client.publish(topic=event["device"],
                            qos=0, payload=json.dumps(message))
             log_msg = {}
+            log_msg["time_stamp"] = "none"
             log_msg["opeation"] = "query"
             log_msg["carport_id"] = -1
             log_msg["vehicle_id"] = -1
@@ -217,10 +221,3 @@ def lambda_handler(event, context):
             client.publish(topic="running_log", qos=0,
                            payload=json.dumps(log_msg))
         return
-        # if __name__ == "__main__":
-        #     test_data = pd.read_csv(
-        #         "/Users/skymac/Desktop/CS437/Lab4/deploy_package/data2/vehicle0.csv")
-        #     for i in range(2):
-        #         lambda_handler(test_data.loc[i].to_dict(), None)
-        #         # print(test_data.loc[i].to_dict())
-        #         # print(lambda_handler(test_data.loc[i].to_dict()))
